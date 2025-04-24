@@ -8,14 +8,14 @@ ENV PORT=${PORT}
 COPY app.py /app/app.py
 COPY utils.py /app/utils.py
 COPY access_util.py /app/access_util.py
-COPY rsa_key.p8 /app/rsa_key.p8
-COPY configuration.toml /app/configuration.toml
+COPY rsa_key.p8 /app/secrets/rsa_key.p8
+COPY configuration.toml /app/secrets/configuration.toml
 
 
 # Install mdbtools and other dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    mdbtools \
+    mdbtools \ 
     && rm -rf /var/lib/apt/lists/*
 
 

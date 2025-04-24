@@ -3,3 +3,5 @@
 *.pub
 .DS_Store
 job_container/build.sh
+*__pycache__*
+*__init__*

@@ -30,15 +30,13 @@ The key components of this project are:
     * Reading data from each table.
     * Connecting to Snowflake.
     * Loading the table data into the target Snowflake table, including columns for the filename and timestamp.
-    * Handling potential errors and logging.
 * **Snowflake Stage:** The designated location in Snowflake where the Access database files will be stored.
-* **Snowflake Target Table:** The Snowflake table where the data from all the Access database tables will be loaded. This table will likely have columns corresponding to the data in the Access tables, plus columns for the source filename and ingestion timestamp.
+* **Snowflake Target Table:** The Snowflake table will be generated automatically keeping the filename and a time stamp of the extraction. The table content will be stored as a variant
 * **Event Trigger Mechanism:** A mechanism to automatically trigger the containerized job when a new file lands on the Snowflake stage. This could be:
     * **Snowpipe:** Snowflake's continuous data ingestion service.
     * **Custom Notification Service:** A service (e.g., AWS Lambda, Azure Function) that listens for stage events and triggers the container.
 
 ## Setup and Deployment
-
 To set up and deploy this solution, follow these steps:
 
 1.  **Prerequisites:**
@@ -61,11 +59,13 @@ To set up and deploy this solution, follow these steps:
         * Define the entry point for the container (the execution of your script).
     * Build the Docker image: `docker build -t your-registry/your-image-name:tag .`
     * Push the Docker image to your chosen container registry: `docker push your-registry/your-image-name:tag`
+    * Check the Build.sh.sample file for a pattern to automate
 
 3.  **Snowflake Setup:**
     * The setup folder has a sql script to setup the environment. The requirements are to have a target user account and ideally use key/pair authentication for access from the container.
 
 4.  **Event Trigger Configuration:**
+    This needs to be configured based on your use case.
     * **Using Snowpipe:**
         * Create a Snowpipe that listens for new files on your stage.
         * Configure the Snowpipe to trigger a Snowpark Container Services (or similar) task that runs your container. You'll need to pass the filename of the newly arrived file to your container as an argument.
@@ -73,6 +73,7 @@ To set up and deploy this solution, follow these steps:
         * Set up a notification mechanism (e.g., using Snowflake stage notifications to a cloud messaging service like AWS SQS or Azure Queue Storage).
         * Create a service (e.g., AWS Lambda, Azure Function) that listens to these notifications.
         * This service should be configured to pull and run your container image, passing the filename of the newly uploaded Access database file as an argument to the container.
+    
 
 5.  **Container Execution in Snowflake (Example using Snowpark Container Services):**
     * Ensure Snowpark Container Services is enabled for your Snowflake account.
@@ -81,9 +82,9 @@ To set up and deploy this solution, follow these steps:
 ## Usage
 
 1.  Upload your Microsoft Access Database (.accdb or .mdb) files to the configured Snowflake stage (e.g., `raw`).
-2.  The configured event trigger (Snowpipe or custom service) will automatically detect the new file.
+2.  The configured event trigger (Snowpipe or custom service) will automatically detect the new file. *Configured Per your use case*
 3.  The containerized ingestion job will be launched.
-4.  The job will read all tables from the uploaded Access database, export their contents, and load the data and create a table with the filename and _timestamp in Snowflake on the target schema
+4.  The job will read all tables from the Snowflake Stage, export their contents, and load the data and create a table with the filename and _timestamp in Snowflake on the target schema
 
 ## Considerations and Future Enhancements
 
@@ -94,5 +95,3 @@ To set up and deploy this solution, follow these steps:
 * **Logging and Monitoring:** Implement comprehensive logging within the container and consider setting up monitoring tools to track the success and failure of the ingestion jobs.
 * **Table Name Tracking:** The current design loads all data into a single table. You might want to enhance it to either create separate Snowflake tables for each Access database table or include the original table name as a column in the target table for better organization.
 * **Data Type Mapping:** Carefully consider the mapping of data types between Microsoft Access and Snowflake to ensure data integrity.
-
-This README provides a comprehensive overview of the Snowflake Access Database Ingestion Pipeline project. Remember to adapt the specific implementation details (scripting language, container orchestration, event trigger) to your specific Snowflake environment and requirements.

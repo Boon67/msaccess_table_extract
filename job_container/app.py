@@ -12,7 +12,16 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 
-def connect_snowflake(toml_file_path: str) -> Session:
+
+def get_login_token():
+    """
+    Read the login token supplied automatically by Snowflake. These tokens
+    are short lived and should always be read right before creating any new connection.
+    """
+    with open("/snowflake/session/token", "r") as f:
+        return f.read()
+
+def connect_snowflake(toml_file_path: str, ingress_user_token=None) -> Session:
     """
     Establishes a Snowpark session using connection parameters from a TOML file.
 
@@ -44,18 +53,35 @@ def connect_snowflake(toml_file_path: str) -> Session:
         raise FileNotFoundError(f"TOML file not found at: {toml_file_path}")
     except toml.TomlDecodeError as e:
         raise toml.TomlDecodeError(f"Error decoding TOML file: {e}")
-
     snowflake_config = config.get('snowflake', {})  #handles if there is no snowflake section
-    connection_params = {
-        "account": snowflake_config.get("account"),
-        "user": snowflake_config.get("user"),
-        "password": snowflake_config.get("password"),
-        "private_key_file":snowflake_config.get("private_key_path"),
-        "role": snowflake_config.get("role"),
-        "warehouse": snowflake_config.get("warehouse"),  # Optional
-        "database": snowflake_config.get("database"),    # Optional
-        "schema": snowflake_config.get("schema")        # Optional
-    }
+    
+    if os.path.exists("/snowflake/session/token"):
+        logger.info("Creating a session as service user.")
+        connection_params = {
+            'host': os.getenv('SNOWFLAKE_HOST'),
+            'port': os.getenv('SNOWFLAKE_PORT'),
+            'protocol': "https",
+            'account': os.getenv('SNOWFLAKE_ACCOUNT'),
+            'authenticator': "oauth",
+            'token': open('/snowflake/session/token', 'r').read(),
+            'warehouse': os.getenv('SNOWFLAKE_WAREHOUSE'),
+            'database': os.getenv('SNOWFLAKE_DATABASE'),
+            'schema': os.getenv('SNOWFLAKE_SCHEMA'),
+            'client_session_keep_alive': True 
+        }
+    
+    else:
+        logger.info("Creating a session as user defined in TOML file.")
+        connection_params = {
+            "account": snowflake_config.get("account"),
+            "user": snowflake_config.get("user"),
+            "password": snowflake_config.get("password"),
+            "private_key_file":snowflake_config.get("private_key_path"),
+            "role": snowflake_config.get("role"),
+            "warehouse": snowflake_config.get("warehouse"),  # Optional
+            "database": snowflake_config.get("database"),    # Optional
+            "schema": snowflake_config.get("schema")        # Optional
+        }
 
     # Remove keys with None values, as Snowpark handles defaults.
     connection_params = {k: v for k, v in connection_params.items() if v is not None}
@@ -63,7 +89,9 @@ def connect_snowflake(toml_file_path: str) -> Session:
     try:
         session = Session.builder.configs(connection_params).create()
         session.use_role( snowflake_config.get("role"))
-        print(f"Successfully connected to Snowflake as user: {session.get_current_user()}")
+        if snowflake_config.get("warehouse") is not None:
+            session.use_warehouse(snowflake_config.get("warehouse"))
+        logger.info(f"Successfully connected to Snowflake as user: {session.get_current_user()}")
         return session
     except Exception as e:
         raise Exception(f"Failed to connect to Snowflake: {e}")
@@ -75,7 +103,7 @@ def main():
     """
     env="snowflake"
     # Load configuration from a TOML file
-    config_file = "configuration.toml"  # You can change the filename if needed
+    config_file = "./secrets/configuration.toml"  # You can change the filename if needed
     try:
         with open(config_file, "r") as f:
             config = toml.load(f)
@@ -95,17 +123,18 @@ def main():
     #1.  Extract stage names from the configuration
     files_list=utils.list_files_in_stage(session, raw_stage)
     #2.  Move the file and process them sequentially
-    for f in files_list:
-        filename=f["name"].split("/")[-1]
-        utils.move_staged_file(session, filename, raw_stage,processing_stage)
-        print(f)
-        results=utils.process_file(session,filename, processing_stage)
-        if results:
-            utils.move_staged_file(session, filename, processing_stage,complete_stage)
-        else:
-            utils.move_staged_file(session, filename, processing_stage,error_stage)
-    if len(files_list)==0:
-        logger.info("No files to process")
+    if files_list:
+        if len(files_list)==0:
+            logger.info("No files to process")
+            return
+        for f in files_list:
+            filename=f["name"].split("/")[-1]
+            utils.move_staged_file(session, filename, raw_stage,processing_stage)
+            results=utils.process_file(session,filename, processing_stage)
+            if results:
+                utils.move_staged_file(session, filename, processing_stage,complete_stage)
+            else:
+                utils.move_staged_file(session, filename, processing_stage,error_stage)
 
 
 if __name__ == "__main__":

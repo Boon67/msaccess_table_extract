@@ -1,0 +1,13 @@
+#See: https://docs.snowflake.com/en/developer-guide/snowpark-container-services/working-with-registry-repository
+container_name="msaccess_job_runner"
+container_registry="<container registry url"
+
+#docker login $container_registry #Auth for container 
+#TODO: Switch to auth with Keypair auth
+docker login $container_registry
+docker build --rm --platform linux/amd64 -t $container_name .
+docker tag $container_name $container_registry/$container_name:latest #Tag the container for pushing to the SF Container Registry
+#Push to SF container repository
+docker push $container_registry/$container_name:latest
+
+

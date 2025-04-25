@@ -1,4 +1,6 @@
-SET ACCOUNTLEVELPERMISSION='accountadmin'; --Used to create the compute pool
+
+/*https://docs.snowflake.com/en/sql-reference/sql/execute-job-service*/
+/*https://docs.snowflake.com/en/user-guide/tasks-intro */
 SET database_name = 'MSACCESS'; --DB Name
 SET schema_name = $database_name || '.' || 'DATA'; --Schema
 SET warehouse_name = 'demo_wh'; --Warehouse
@@ -13,17 +15,38 @@ SET complete_stage='complete';
 SET SERVICE_NAME='ms_access_extract';
 SET IMAGE_ENDPOINT='sfsenorthamerica-tboon-aws2.registry.snowflakecomputing.com/msaccess/data/container_repository';
 SET IMAGENAME='msaccess_job_runner';
+use schema IDENTIFIER($schema_name);
+SET job_service_name=$schema_name || '.' || $SERVICE_NAME;
+SET TASK_NAME=$schema_name || '.msdb_extract_task';
 
-
-EXECUTE JOB SERVICE
+EXECUTE JOB SERVICE --Job Service definition
   IN COMPUTE POOL IDENTIFIER($compute_pool_name)
-  NAME=MSACCESS.DATA.ms_access_extract
-  FROM SPECIFICATION 
-    $$
+  NAME=IDENTIFIER($job_service_name)
+  FROM SPECIFICATION $$
     spec:
       containers:
       - name: msaccessextract
         image: /msaccess/data/container_repository/msaccess_job_runner:latest
     $$; 
 
-SHOW SERVICE CONTAINERS IN SERVICE MSACCESS.DATA.ms_access_extract;
+/* Option to create it as a periodic task 
+CREATE OR REPLACE TASK IDENTIFIER($task_name) --Task to run
+    SCHEDULE = 'USING CRON 0 * * * * UTC'  -- Runs at the beginning of every hour (0th minute).  Adjust as needed.
+    AS
+EXECUTE JOB SERVICE --Job Service definition
+  IN COMPUTE POOL IDENTIFIER($compute_pool_name)
+  NAME=IDENTIFIER($job_service_name)
+  FROM SPECIFICATION $$
+    spec:
+      containers:
+      - name: msaccessextract
+        image: /msaccess/data/container_repository/msaccess_job_runner:latest
+    $$; 
+
+ALTER TASK IDENTIFIER($task_name) RESUME; -- Start the task
+SHOW TASKS;
+*/
+
+
+SHOW TASKS;
+--DROP TASK MSDB_EXTRACT_TASK;

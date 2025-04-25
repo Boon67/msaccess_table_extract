@@ -13,11 +13,10 @@ SET processing_stage='processing';
 SET error_stage='error';
 SET complete_stage='complete';
 SET SERVICE_NAME='ms_access_extract';
-SET IMAGE_ENDPOINT='sfsenorthamerica-tboon-aws2.registry.snowflakecomputing.com/msaccess/data/container_repository';
 SET IMAGENAME='msaccess_job_runner';
 use schema IDENTIFIER($schema_name);
 SET job_service_name=$schema_name || '.' || $SERVICE_NAME;
-SET TASK_NAME=$schema_name || '.msdb_extract_task';
+
 
 EXECUTE JOB SERVICE --Job Service definition
   IN COMPUTE POOL IDENTIFIER($compute_pool_name)
@@ -30,6 +29,7 @@ EXECUTE JOB SERVICE --Job Service definition
     $$; 
 
 /* Option to create it as a periodic task 
+SET TASK_NAME=$schema_name || '.msdb_extract_task';
 CREATE OR REPLACE TASK IDENTIFIER($task_name) --Task to run
     SCHEDULE = 'USING CRON 0 * * * * UTC'  -- Runs at the beginning of every hour (0th minute).  Adjust as needed.
     AS

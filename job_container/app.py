@@ -1,7 +1,7 @@
 
 import os
 import logging
-import time
+import json
 import toml  # Import the toml library
 from snowflake.snowpark import Session
 import utils
@@ -21,7 +21,7 @@ def get_login_token():
     with open("/snowflake/session/token", "r") as f:
         return f.read()
 
-def connect_snowflake(toml_file_path: str, ingress_user_token=None) -> Session:
+def connect_snowflake(toml_file_path: str) -> Session:
     """
     Establishes a Snowpark session using connection parameters from a TOML file.
 
@@ -120,6 +120,11 @@ def main():
     processing_stage = config[env]["processing_stage"]
     complete_stage = config[env]["complete_stage"]
     error_stage = config[env]["error_stage"]
+    
+    #For Testing sample data 
+    #table_data={"customers": [{"customer_id": "1", "name": "Dave Lister"}, {"customer_id": "2", "name": "Arnold Rimmer"}, {"customer_id": "3", "name": "The Cat"}, {"customer_id": "4", "name": "Holly"}, {"customer_id": "5", "name": "Kryten"}, {"customer_id": "6", "name": "Kristine Kochanski"}], "orders": [{"order_id": "1", "customer_id": "2", "product_id": "1", "amount": "7"}, {"order_id": "2", "customer_id": "2", "product_id": "3", "amount": "2"}, {"order_id": "3", "customer_id": "1", "product_id": "2", "amount": "3"}, {"order_id": "4", "customer_id": "6", "product_id": "3", "amount": "5"}], "products": [{"product_id": "1", "title": "Chair"}, {"product_id": "2", "title": "Table"}, {"product_id": "3", "title": "Computer"}]}    
+    #utils.write_json_string_to_table(session, json.dumps(table_data), "test")
+    
     #1.  Extract stage names from the configuration
     files_list=utils.list_files_in_stage(session, raw_stage)
     #2.  Move the file and process them sequentially
@@ -127,6 +132,7 @@ def main():
         if len(files_list)==0:
             logger.info("No files to process")
             return
+        #Iterate through each of the files
         for f in files_list:
             filename=f["name"].split("/")[-1]
             utils.move_staged_file(session, filename, raw_stage,processing_stage)

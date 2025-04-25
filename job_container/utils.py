@@ -124,7 +124,7 @@ def move_staged_file(
         return False
     
     
-def write_json_string_to_table(session: Session, json_string: str, table_name: str) -> None:
+def write_json_string_to_table(session: Session, json_string: str, filename: str) -> None:
     """
     Writes a JSON string to a Snowflake table.  The JSON string is treated as a single row
     with a single VARIANT column.
@@ -137,17 +137,25 @@ def write_json_string_to_table(session: Session, json_string: str, table_name: s
                        If True, the table is created with a single VARIANT column.
                        If False, the table must already exist with a compatible schema.
     """
+    
+    now = datetime.datetime.now()
+    timestamp_string=""
+    timestamp_string = now.strftime("%Y%m%d_%H%M%S")
+    target_table_name=f"{filename.replace('.','_')}_{timestamp_string}"
+    accessdb_tablename='table_name'
+    rowname='row'
+    df=pd.DataFrame(columns=[accessdb_tablename, rowname, "filename", "timestamp"])
+    
     try:
         # 1. Parse the JSON string
         try:
-            df=pd.DataFrame({"data":json.loads(json_string)})
-            now = datetime.datetime.now()
-            timestamp_string=""
-            timestamp_string = now.strftime("%Y%m%d_%H%M%S")
-            table_name = f"{table_name}_{timestamp_string}"
+            jsonObj=json.loads(json_string)
+            for tablename in jsonObj.keys():
+                tmpdf=pd.DataFrame({accessdb_tablename: tablename, rowname:jsonObj[tablename], "filename":filename, "timestamp":now})
+                df=pd.concat([df, tmpdf], ignore_index=True)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON string: {e}")    
-        session.write_pandas(df, table_name, auto_create_table=True, overwrite=True)
+        session.write_pandas(df, target_table_name, auto_create_table=True, overwrite=True)
     except Exception as e:
         print(f"Error writing JSON to table: {e}") 
     
@@ -171,10 +179,8 @@ def process_file(session,filename, stage_name):
         table_data={}
         for table in tablelist["tables"]:
             table_data[table]=MSAccessUtils.read_table_data(fullpath, table)
-        #table_data={"customers": [{"customer_id": "1", "name": "Dave Lister"}, {"customer_id": "2", "name": "Arnold Rimmer"}, {"customer_id": "3", "name": "The Cat"}, {"customer_id": "4", "name": "Holly"}, {"customer_id": "5", "name": "Kryten"}, {"customer_id": "6", "name": "Kristine Kochanski"}], "orders": [{"order_id": "1", "customer_id": "2", "product_id": "1", "amount": "7"}, {"order_id": "2", "customer_id": "2", "product_id": "3", "amount": "2"}, {"order_id": "3", "customer_id": "1", "product_id": "2", "amount": "3"}, {"order_id": "4", "customer_id": "6", "product_id": "3", "amount": "5"}], "products": [{"product_id": "1", "title": "Chair"}, {"product_id": "2", "title": "Table"}, {"product_id": "3", "title": "Computer"}]}    
-        
         print(f"{json.dumps(table_data)}\n")
-        write_json_string_to_table(session, json.dumps(table_data), filename.replace('.','_'))
+        write_json_string_to_table(session, json.dumps(table_data), filename)
         
     except Exception as e:
         return f"Error extracting files: {e}"

@@ -2,9 +2,9 @@
 
 This project provides a solution for automatically ingesting data from Microsoft Access Database (.accdb or .mdb) files stored in a Snowflake stage. When a new Access database file is detected on the stage, a containerized job is triggered to:
 
-1.  **Read** all tables within the Access database file.
+1.  **Read** all tables within each Access database file.
 2.  **Export** the data from each table.
-3.  **Load** the data into a designated Snowflake table.
+3.  **Load** the data into a designated Snowflake table based on the filename and timestamp.
 4.  **Include Metadata:** Each record in the Snowflake table will be augmented with the original Access database filename and a timestamp indicating when the data was processed.
 
 This solution leverages containerization for portability and scalability, making it easy to deploy and manage within your Snowflake environment.
@@ -25,16 +25,16 @@ When a new Access database file is uploaded to the designated Snowflake stage, a
 The key components of this project are:
 
 * **Containerized Ingestion Job:** A Docker container that encapsulates the logic for:
-    * Connecting to the Access database file from the Snowflake stage.
-    * Iterating through all tables in the database.
+    * Reading the Access database file from the Snowflake stage.
     * Reading data from each table.
-    * Connecting to Snowflake.
-    * Loading the table data into the target Snowflake table, including columns for the filename and timestamp.
+    * Loading the table into a dataframe
+    * Saving the the table data into the target Snowflake table, including columns for the filename and timestamp.
 * **Snowflake Stage:** The designated location in Snowflake where the Access database files will be stored.
 * **Snowflake Target Table:** The Snowflake table will be generated automatically keeping the filename and a time stamp of the extraction. The table content will be stored as a variant
 * **Event Trigger Mechanism:** A mechanism to automatically trigger the containerized job when a new file lands on the Snowflake stage. This could be:
     * **Snowpipe:** Snowflake's continuous data ingestion service.
     * **Custom Notification Service:** A service (e.g., AWS Lambda, Azure Function) that listens for stage events and triggers the container.
+    * **Snowflake Task** A periodic run (sample code provided)
 
 ## Setup and Deployment
 To set up and deploy this solution, follow these steps:
@@ -62,7 +62,7 @@ To set up and deploy this solution, follow these steps:
     * Check the Build.sh.sample file for a pattern to automate
 
 3.  **Snowflake Setup:**
-    * The setup folder has a sql script to setup the environment. The requirements are to have a target user account and ideally use key/pair authentication for access from the container.
+    * The setup folder has a setup script to setup the environment. The requirements are to have a target user account and ideally use key/pair authentication for access from the container for testing locally, and using the token on the container to execute as the caller role.
 
 4.  **Event Trigger Configuration:**
     This needs to be configured based on your use case.
@@ -73,6 +73,9 @@ To set up and deploy this solution, follow these steps:
         * Set up a notification mechanism (e.g., using Snowflake stage notifications to a cloud messaging service like AWS SQS or Azure Queue Storage).
         * Create a service (e.g., AWS Lambda, Azure Function) that listens to these notifications.
         * This service should be configured to pull and run your container image, passing the filename of the newly uploaded Access database file as an argument to the container.
+    * **Using a Schedule Task to Run Periodically** 
+        * Setup a task to execute the Job Service periodically.
+        * Sample setup code provided in the setup folder.
     
 
 5.  **Container Execution in Snowflake (Example using Snowpark Container Services):**
